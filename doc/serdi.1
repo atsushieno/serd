@@ -13,6 +13,13 @@ serdi [OPTION]... INPUT...
 Set input base URI.
 
 .TP
+\fB\-V\fR
+Validate inputs.
+All necessary data, including schemas, must be passed as inputs.
+Output will only be written if validation succeeds.
+Combine with -o empty to suppress output and only show validation errors.
+
+.TP
 \fB\-a\fR
 Write ASCII output if possible.
 
