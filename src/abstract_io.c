@@ -1,6 +1,7 @@
 
 #if ANDROID
-#include <android/androidasset.h>
+#include <android/asset_manager.h>
+#include <android/asset_manager_jni.h>
 #else
 #include <fcntl.h>
 #endif
