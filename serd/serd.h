@@ -853,7 +853,7 @@ serd_reader_read_file(SerdReader*    reader,
 SERD_API
 SerdStatus
 serd_reader_start_stream(SerdReader*    reader,
-                         FILE*          file,
+                         void*          file,
                          const uint8_t* name,
                          bool           bulk);
 
@@ -897,7 +897,7 @@ serd_reader_end_stream(SerdReader* reader);
 SERD_API
 SerdStatus
 serd_reader_read_file_handle(SerdReader*    reader,
-                             FILE*          file,
+                             void*          file,
                              const uint8_t* name);
 
 /**

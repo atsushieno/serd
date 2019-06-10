@@ -79,7 +79,8 @@ lib_source = ['src/byte_source.c',
               'src/reader.c',
               'src/string.c',
               'src/uri.c',
-              'src/writer.c']
+              'src/writer.c',
+              'src/abstract_io.c']
 
 def build(bld):
     # C Headers

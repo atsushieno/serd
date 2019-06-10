@@ -22,7 +22,7 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#include <stdio.h>
+#include <abstract_io.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -52,17 +52,17 @@ static const uint8_t replacement_char[] = { 0xEF, 0xBF, 0xBD };
 
 /* File and Buffer Utilities */
 
-static inline FILE*
+static inline void*
 serd_fopen(const char* path, const char* mode)
 {
-	FILE* fd = fopen(path, mode);
+	void* fd = abstract_fopen(path, mode);
 	if (!fd) {
-		fprintf(stderr, "error: failed to open file %s (%s)\n",
+		abstract_fprintf(abstract_stderr(), "error: failed to open file %s (%s)\n",
 		        path, strerror(errno));
 		return NULL;
 	}
 #if defined(HAVE_POSIX_FADVISE) && defined(HAVE_FILENO)
-	posix_fadvise(fileno(fd), 0, 0, POSIX_FADV_SEQUENTIAL);
+	abstract_posix_fadvise(abstract_fileno(fd), 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 	return fd;
 }
@@ -104,7 +104,7 @@ typedef struct {
 
 SerdStatus
 serd_byte_source_open_file(SerdByteSource* source,
-                           FILE*           file,
+                           void*           file,
                            bool            bulk);
 
 SerdStatus
@@ -534,8 +534,8 @@ serd_error(SerdErrorSink error_sink, void* handle, const SerdError* e)
 	if (error_sink) {
 		error_sink(handle, e);
 	} else {
-		fprintf(stderr, "error: %s:%u:%u: ", e->filename, e->line, e->col);
-		vfprintf(stderr, e->fmt, *e->args);
+		abstract_fprintf(abstract_stderr(), "error: %s:%u:%u: ", e->filename, e->line, e->col);
+		abstract_vfprintf(abstract_stderr(), e->fmt, *e->args);
 	}
 }
 
