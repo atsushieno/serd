@@ -25,14 +25,14 @@ serd_uri_to_path(const uint8_t* uri)
 	const uint8_t* path = uri;
 	if (!is_windows_path(uri) && serd_uri_string_has_scheme(uri)) {
 		if (strncmp((const char*)uri, "file:", 5)) {
-			fprintf(abstract_stderr(), "Non-file URI `%s'\n", uri);
+			abstract_error_fprintf("Non-file URI `%s'\n", uri);
 			return NULL;
 		} else if (!strncmp((const char*)uri, "file://localhost/", 17)) {
 			path = uri + 16;
 		} else if (!strncmp((const char*)uri, "file://", 7)) {
 			path = uri + 7;
 		} else {
-			fprintf(abstract_stderr(), "Invalid file URI `%s'\n", uri);
+			abstract_error_fprintf("Invalid file URI `%s'\n", uri);
 			return NULL;
 		}
 		if (is_windows_path(path + 1)) {

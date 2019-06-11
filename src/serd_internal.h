@@ -22,9 +22,10 @@
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
-#include <abstract_io.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <abstract_io.h>
 
 #include "serd/serd.h"
 #include "serd_config.h"
@@ -57,12 +58,12 @@ serd_fopen(const char* path, const char* mode)
 {
 	void* fd = abstract_fopen(path, mode);
 	if (!fd) {
-		abstract_fprintf(abstract_stderr(), "error: failed to open file %s (%s)\n",
+		abstract_error_fprintf("error: failed to open file %s (%s)\n",
 		        path, strerror(errno));
 		return NULL;
 	}
 #if defined(HAVE_POSIX_FADVISE) && defined(HAVE_FILENO)
-	abstract_posix_fadvise(abstract_fileno(fd), 0, 0, POSIX_FADV_SEQUENTIAL);
+	posix_fadvise(fileno(fd), 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 	return fd;
 }
@@ -534,8 +535,8 @@ serd_error(SerdErrorSink error_sink, void* handle, const SerdError* e)
 	if (error_sink) {
 		error_sink(handle, e);
 	} else {
-		abstract_fprintf(abstract_stderr(), "error: %s:%u:%u: ", e->filename, e->line, e->col);
-		abstract_vfprintf(abstract_stderr(), e->fmt, *e->args);
+		abstract_error_fprintf("error: %s:%u:%u: ", e->filename, e->line, e->col);
+		abstract_error_vfprintf(e->fmt, *e->args);
 	}
 }
 

@@ -8,54 +8,58 @@
 
 #include "abstract_io.h"
 
+
 #if ANDROID
 
-void *abstract_stderr()
+AAssetManager *current_asset_manager;
+
+void abstract_set_io_context (void* ioContext)
 {
+	current_asset_manager = (AAssetManager*) ioContext;
 }
+
 
 void* abstract_fopen(const char* path, const char* mode)
 {
+	return AAssetManager_open(current_asset_manager, path, AASSET_MODE_UNKNOWN);
 }
 
 int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
 {
+	return AAsset_read((AAsset*) stream, ptr, size * count);
 }
 
-int abstract_vfprintf (void* stream, const char *format, va_list arg)
+int abstract_error_vfprintf (const char *format, va_list arg)
 {
-}
-
-int abstract_fprintf (void* stream, const char *format, ...)
-{
+    return vfprintf (stderr, format, arg);
 }
 
 int abstract_ferror (void* stream)
 {
+	/* not much we can do here */
+	return ferror((FILE*) stream);
 }
 
 int abstract_fclose (void* stream)
 {
-}
-
-int abstract_fileno (void* stream)
-{
-}
-
-int abstract_posix_fadvise(int fd, off_t offset, off_t len, int advice)
-{
+	AAsset_close((AAsset*) stream);
+	return 0;
 }
 
 int abstract_getc (void* stream)
 {
+	char buf[1];
+	if (AAsset_read(stream, &buf, 1) <= 0)
+		return -1;
+	return buf [0];
 }
 
 #else
 
-void *abstract_stderr()
+void abstract_set_io_context (void* ioContext)
 {
-    return stderr;
 }
+
 
 void* abstract_fopen(const char* path, const char* mode)
 {
@@ -67,16 +71,9 @@ int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
     return fread(ptr, size, count, stream);
 }
 
-int abstract_vfprintf (void* stream, const char *format, va_list arg)
+int abstract_error_vfprintf (const char *format, va_list arg)
 {
-    return vfprintf (stream, format, arg);
-}
-
-int abstract_fprintf (void* stream, const char *format, ...)
-{
-    va_list ap;
-    va_start (ap, format);
-    return fprintf (stream, format, ap);
+    return vfprintf (stderr, format, arg);
 }
 
 int abstract_ferror (void* stream)
@@ -89,19 +86,16 @@ int abstract_fclose (void* stream)
     return fclose (stream);
 }
 
-int abstract_fileno (void* stream)
-{
-    return fileno (stream);
-}
-
-int abstract_posix_fadvise(int fd, off_t offset, off_t len, int advice)
-{
-    return posix_fadvise (fd, offset, len, advice);
-}
-
 int abstract_getc (void* stream)
 {
     return getc (stream);
 }
 
 #endif
+
+int abstract_error_fprintf (const char *format, ...)
+{
+    va_list ap;
+    va_start (ap, format);
+    return abstract_error_vfprintf (format, ap);
+}
