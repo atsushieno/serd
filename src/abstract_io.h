@@ -1,12 +1,14 @@
 
-#if !__ABSTRACT_H_INCLUDED__
+#ifndef __ABSTRACT_H_INCLUDED__
 #define __ABSTRACT_H_INCLUDED__
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <serd/serd.h>
 
 /* nothing for desktop, AAssetManager* for Android */
+SERD_API
 void abstract_set_io_context (void* ioContext);
 
 /* serd specific */
