@@ -2,6 +2,7 @@
 #if ANDROID
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
+#include <assert.h>
 #else
 #include <fcntl.h>
 #endif
@@ -32,7 +33,7 @@ int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
 
 int abstract_fwrite(const void *ptr, size_t size, size_t count, void* stream)
 {
-	assert(0); /* should not reach here */
+	puts (NULL); /* damn "undefined reference to assert()" - just cause SIGSEGV then. */
 }
 
 int abstract_error_vfprintf (const char *format, va_list arg)
