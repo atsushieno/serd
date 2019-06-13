@@ -30,6 +30,11 @@ int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
 	return AAsset_read((AAsset*) stream, ptr, size * count) / (int) size;
 }
 
+int abstract_fwrite(const void *ptr, size_t size, size_t count, void* stream)
+{
+	assert(false); /* should not reach here */
+}
+
 int abstract_error_vfprintf (const char *format, va_list arg)
 {
     return vfprintf (stderr, format, arg);
@@ -70,6 +75,11 @@ void* abstract_fopen(const char* path, const char* mode)
 int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
 {
     return fread(ptr, size, count, stream);
+}
+
+int abstract_fwrite(const void *ptr, size_t size, size_t count, void* stream)
+{
+    return fwrite(ptr, size, count, stream);
 }
 
 int abstract_error_vfprintf (const char *format, va_list arg)
