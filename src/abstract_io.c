@@ -21,14 +21,13 @@ void abstract_set_io_context (void* ioContext)
 
 void* abstract_fopen(const char* path, const char* mode)
 {
-	assert (path != NULL);
-	char* pathFixed = NULL;
+	char *pathFixed = NULL;
 	if (path [0] == '/') {
-		pathFixed = calloc(strlen(path) + 1);
+		pathFixed = calloc(strlen(path) + 1, 1);
 		pathFixed [0] = '.';
 		strcpy (pathFixed + 1, path);
 	}
-	int ret = AAssetManager_open(current_asset_manager, pathFixed != NULL ? pathFixed : path, AASSET_MODE_UNKNOWN);
+	void *ret = AAssetManager_open(current_asset_manager, pathFixed != NULL ? pathFixed : path, AASSET_MODE_UNKNOWN);
 	if (pathFixed)
 		free (pathFixed);
 	return ret;
