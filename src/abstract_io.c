@@ -32,7 +32,7 @@ int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
 
 int abstract_fwrite(const void *ptr, size_t size, size_t count, void* stream)
 {
-	assert(false); /* should not reach here */
+	assert(0); /* should not reach here */
 }
 
 int abstract_error_vfprintf (const char *format, va_list arg)
