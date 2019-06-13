@@ -27,7 +27,7 @@ void* abstract_fopen(const char* path, const char* mode)
 		pathFixed [0] = '.';
 		strcpy (pathFixed + 1, path);
 	}
-	void *ret = AAssetManager_open(current_asset_manager, pathFixed != NULL ? pathFixed : path, AASSET_MODE_UNKNOWN);
+	void *ret = AAssetManager_open(current_asset_manager, pathFixed != NULL ? pathFixed : path, AASSET_MODE_RANDOM);
 	if (pathFixed)
 		free (pathFixed);
 	return ret;
