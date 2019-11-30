@@ -18,7 +18,7 @@
 		<#test-30>
 		<#test-a-without-whitespace>
 		<#test-backspace>
-		<#test-bad-utf8>
+		<#test-base-nopath>
 		<#test-base-query>
 		<#test-blank-cont>
 		<#test-blank-in-list>
@@ -109,11 +109,11 @@
 	mf:action <test-backspace.ttl> ;
 	mf:result <test-backspace.nt> .
 
-<#test-bad-utf8>
+<#test-base-nopath>
 	rdf:type rdft:TestTurtleEval ;
-	mf:name "test-bad-utf8" ;
-	mf:action <test-bad-utf8.ttl> ;
-	mf:result <test-bad-utf8.nt> .
+	mf:name "test-base-nopath" ;
+	mf:action <test-base-nopath.ttl> ;
+	mf:result <test-base-nopath.nt> .
 
 <#test-base-query>
 	rdf:type rdft:TestTurtleEval ;

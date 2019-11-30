@@ -3,6 +3,7 @@
 import glob
 import io
 import os
+import sys
 
 from waflib import Logs, Options
 from waflib.extras import autowaf
@@ -11,7 +12,7 @@ from waflib.extras import autowaf
 # major increment <=> incompatible changes
 # minor increment <=> compatible changes (additions)
 # micro increment <=> no interface changes
-SERD_VERSION       = '0.30.1'
+SERD_VERSION       = '0.30.2'
 SERD_MAJOR_VERSION = '0'
 
 # Mandatory waf variables
@@ -19,6 +20,11 @@ APPNAME = 'serd'        # Package name for waf dist
 VERSION = SERD_VERSION  # Package version for waf dist
 top     = '.'           # Source directory
 out     = 'build'       # Build directory
+
+# Release variables
+uri          = 'http://drobilla.net/sw/serd'
+dist_pattern = 'http://download.drobilla.net/serd-%d.%d.%d.tar.bz2'
+post_tags    = ['Hacking', 'RDF', 'Serd']
 
 def options(ctx):
     ctx.load('compiler_c')
@@ -56,11 +62,11 @@ def configure(conf):
         for name, header in {'posix_memalign': 'stdlib.h',
                              'posix_fadvise':  'fcntl.h',
                              'fileno':         'stdio.h'}.items():
-            autowaf.check_function(conf, 'c', name,
-                                   header_name = header,
-                                   define_name = 'HAVE_' + name.upper(),
-                                   defines     = ['_POSIX_C_SOURCE=200809L'],
-                                   mandatory   = False)
+            conf.check_function('c', name,
+                                header_name = header,
+                                define_name = 'HAVE_' + name.upper(),
+                                defines     = ['_POSIX_C_SOURCE=200809L'],
+                                mandatory   = False)
 
     autowaf.set_lib_env(conf, 'serd', SERD_VERSION)
     conf.write_config_header('serd_config.h', remove=False)
@@ -71,6 +77,8 @@ def configure(conf):
          'Build shared library': bool(conf.env['BUILD_SHARED']),
          'Build utilities':      bool(conf.env['BUILD_UTILS']),
          'Build unit tests':     bool(conf.env['BUILD_TESTS'])})
+
+lib_headers = ['src/reader.h']
 
 lib_source = ['src/byte_source.c',
               'src/env.c',
@@ -162,7 +170,14 @@ def build(bld):
             obj.linkflags        = ['-static']
 
     # Documentation
-    autowaf.build_dox(bld, 'SERD', SERD_VERSION, top, out)
+    if bld.env.DOCS:
+        autowaf.build_dox(bld, 'SERD', SERD_VERSION, top, out)
+        bld(features='subst',
+            source='doc/index.html.in',
+            target='doc/index.html',
+            install_path='',
+            name='index',
+            SERD_VERSION=SERD_VERSION)
 
     # Man page
     bld.install_files('${MANDIR}/man1', 'doc/serdi.1')
@@ -192,7 +207,7 @@ def amalgamate(ctx):
             for l in serd_internal_h:
                 amalgamation.write(l.replace('serd/serd.h', 'serd.h'))
 
-        for f in lib_source:
+        for f in lib_headers + lib_source:
             with open(f) as fd:
                 amalgamation.write('\n/**\n   @file %s\n*/' % f)
                 header = True
@@ -201,17 +216,12 @@ def amalgamate(ctx):
                         if l == '*/\n':
                             header = False
                     else:
-                        if l != '#include "serd_internal.h"\n':
+                        if (not l.startswith('#include "') and
+                            l != '#include "serd.h"\n'):
                             amalgamation.write(l)
 
     for i in ['c', 'h']:
         Logs.info('Wrote build/serd.%s' % i)
-
-def upload_docs(ctx):
-    os.system('rsync -ravz --delete -e ssh build/doc/html/ drobilla@drobilla.net:~/drobilla.net/docs/serd/')
-    for page in glob.glob('doc/*.[1-8]'):
-        os.system('soelim %s | pre-grohtml troff -man -wall -Thtml | post-grohtml > build/%s.html' % (page, page))
-        os.system('rsync -avz --delete -e ssh build/%s.html drobilla@drobilla.net:~/drobilla.net/man/' % page)
 
 def earl_assertion(test, passed, asserter):
     import datetime
@@ -285,7 +295,8 @@ def _load_rdf(filename):
 
     cmd = ['./serdi_static', filename]
     if Options.options.test_wrapper:
-        cmd = [Options.options.test_wrapper] + cmd
+        import shlex
+        cmd = shlex.split(Options.options.test_wrapper) + cmd
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     for line in proc.communicate()[0].splitlines():
@@ -347,7 +358,8 @@ def test_suite(ctx, base_uri, testdir, report, isyntax, options=[]):
                                    expected=expected_return,
                                    name=action)
 
-                if result and ((mf + 'result') in model[test]):
+                if (result and expected_return == 0 and
+                    ((mf + 'result') in model[test])):
                     # Check output against test suite
                     check_uri  = model[test][mf + 'result'][0]
                     check_path = ctx.src_path(file_uri_to_path(check_uri))
@@ -363,21 +375,18 @@ def test_suite(ctx, base_uri, testdir, report, isyntax, options=[]):
                 if report is not None:
                     report.write(earl_assertion(test, result, asserter))
 
-                # Run lax test
-                check([command[0]] + ['-l'] + command[1:],
-                      expected=None, name=action + ' lax')
-
     ns_rdftest = 'http://www.w3.org/ns/rdftest#'
     for test_class, instances in instances.items():
         if test_class.startswith(ns_rdftest):
-            expected = 1 if 'Negative' in test_class else 0
+            expected = 1 if '-l' not in options and 'Negative' in test_class else 0
             run_tests(test_class, instances, expected)
 
 def test(tst):
     import tempfile
 
     # Create test output directories
-    for i in ['bad', 'good', 'TurtleTests', 'NTriplesTests', 'NQuadsTests', 'TriGTests']:
+    for i in ['bad', 'good', 'lax',
+              'TurtleTests', 'NTriplesTests', 'NQuadsTests', 'TriGTests']:
         try:
             test_dir = os.path.join('tests', i)
             os.makedirs(test_dir)
@@ -436,10 +445,34 @@ def test(tst):
             check([serdi, 'file://%s/tests/good/manifest.ttl' % srcdir],
                   stdout='/dev/full', name='Write error')
 
+    if sys.version_info.major >= 3:
+        from waflib.extras import autoship
+        try:
+            import rdflib
+            with tst.group('NEWS') as check:
+                news_path = os.path.join(srcdir, 'NEWS')
+                entries = autoship.read_news(top=srcdir)
+                autoship.write_news(entries, 'NEWS.norm')
+                check.file_equals(news_path, 'NEWS.norm')
+
+                meta_path = os.path.join(srcdir, 'serd.ttl')
+                autoship.write_news(entries, 'NEWS.ttl',
+                                    format='turtle', template=meta_path)
+
+                ttl_entries = autoship.read_news('NEWS.ttl',
+                                                 top=srcdir, format='turtle')
+
+                autoship.write_news(ttl_entries, 'NEWS.round')
+                check.file_equals(news_path, 'NEWS.round')
+        except ImportError:
+            Logs.warn('Failed to import rdflib, not running NEWS tests')
+
     # Serd-specific test suites
     serd_base = 'http://drobilla.net/sw/serd/tests/'
     test_suite(tst, serd_base + 'good/', 'good', None, 'Turtle')
     test_suite(tst, serd_base + 'bad/', 'bad', None, 'Turtle')
+    test_suite(tst, serd_base + 'lax/', 'lax', None, 'Turtle', ['-l'])
+    test_suite(tst, serd_base + 'lax/', 'lax', None, 'Turtle')
 
     # Standard test suites
     with open('earl.ttl', 'w') as report:
@@ -458,14 +491,3 @@ def test(tst):
                    'NQuadsTests', report, 'NQuads')
         test_suite(tst, w3c_base + 'TriGTests/',
                    'TriGTests', report, 'Trig', ['-a'])
-
-def posts(ctx):
-    path = str(ctx.path.abspath())
-    autowaf.news_to_posts(
-        os.path.join(path, 'NEWS'),
-        {'title'        : 'Serd',
-         'description'  : autowaf.get_blurb(os.path.join(path, 'README.md')),
-         'dist_pattern' : 'http://download.drobilla.net/serd-%s.tar.bz2'},
-        { 'Author' : 'drobilla',
-          'Tags'   : 'Hacking, RDF, Serd' },
-        os.path.join(out, 'posts'))

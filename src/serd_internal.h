@@ -93,6 +93,7 @@ typedef struct {
 	SerdStreamErrorFunc error_func;   ///< Error function (e.g. ferror)
 	void*               stream;       ///< Stream (e.g. FILE)
 	size_t              page_size;    ///< Number of bytes to read at a time
+	size_t              buf_size;     ///< Number of bytes in file_buf
 	Cursor              cur;          ///< Cursor for error reporting
 	uint8_t*            file_buf;     ///< Buffer iff reading pages from a file
 	const uint8_t*      read_buf;     ///< Pointer to file_buf or read_byte
@@ -141,28 +142,34 @@ serd_byte_source_advance(SerdByteSource* source)
 	SerdStatus st = SERD_SUCCESS;
 
 	switch (serd_byte_source_peek(source)) {
-	case '\0': break;
 	case '\n': ++source->cur.line; source->cur.col = 0; break;
 	default:   ++source->cur.col;
 	}
 
+	const bool was_eof = source->eof;
 	if (source->from_stream) {
 		source->eof = false;
 		if (source->page_size > 1) {
 			if (++source->read_head == source->page_size) {
 				st = serd_byte_source_page(source);
+			} else if (source->read_head == source->buf_size) {
+				source->eof = true;
 			}
 		} else {
 			if (!source->read_func(&source->read_byte, 1, 1, source->stream)) {
+				source->eof = true;
 				st = source->error_func(source->stream) ? SERD_ERR_UNKNOWN
 				                                        : SERD_FAILURE;
 			}
 		}
 	} else if (!source->eof) {
 		++source->read_head; // Move to next character in string
+		if (source->read_buf[source->read_head] == '\0') {
+			source->eof = true;
+		}
 	}
 
-	return source->eof ? SERD_FAILURE : st;
+	return (was_eof && source->eof) ? SERD_FAILURE : st;
 }
 
 /* Stack */
@@ -229,13 +236,14 @@ serd_stack_push_aligned(SerdStack* stack, size_t n_bytes, size_t align)
 	serd_stack_push(stack, 1);
 
 	// Push padding if necessary
-	const uint8_t pad = align - stack->size % align;
+	const size_t pad = align - stack->size % align;
 	if (pad > 0) {
 		serd_stack_push(stack, pad);
 	}
 
 	// Set top of stack to pad count so we can properly pop later
-	stack->buf[stack->size - 1] = pad;
+	assert(pad < UINT8_MAX);
+	stack->buf[stack->size - 1] = (uint8_t)pad;
 
 	// Push requested space at aligned location
 	return serd_stack_push(stack, n_bytes);
@@ -251,7 +259,7 @@ serd_stack_pop_aligned(SerdStack* stack, size_t n_bytes)
 	const uint8_t pad = stack->buf[stack->size - 1];
 
 	// Pop padding and pad count
-	serd_stack_pop(stack, pad + 1);
+	serd_stack_pop(stack, pad + 1u);
 }
 
 /* Byte Sink */
@@ -328,35 +336,35 @@ serd_byte_sink_write(const void* buf, size_t len, SerdByteSink* bsink)
 
 /** Return true if `c` lies within [`min`...`max`] (inclusive) */
 static inline bool
-in_range(const uint8_t c, const uint8_t min, const uint8_t max)
+in_range(const int c, const int min, const int max)
 {
 	return (c >= min && c <= max);
 }
 
 /** RFC2234: ALPHA ::= %x41-5A / %x61-7A  ; A-Z / a-z */
 static inline bool
-is_alpha(const uint8_t c)
+is_alpha(const int c)
 {
 	return in_range(c, 'A', 'Z') || in_range(c, 'a', 'z');
 }
 
 /** RFC2234: DIGIT ::= %x30-39  ; 0-9 */
 static inline bool
-is_digit(const uint8_t c)
+is_digit(const int c)
 {
 	return in_range(c, '0', '9');
 }
 
 /* RFC2234: HEXDIG ::= DIGIT / "A" / "B" / "C" / "D" / "E" / "F" */
 static inline bool
-is_hexdig(const uint8_t c)
+is_hexdig(const int c)
 {
 	return is_digit(c) || in_range(c, 'A', 'F');
 }
 
 /* Turtle / JSON / C: XDIGIT ::= DIGIT / A-F / a-f */
 static inline bool
-is_xdigit(const uint8_t c)
+is_xdigit(const int c)
 {
 	return is_hexdig(c) || in_range(c, 'a', 'f');
 }
@@ -423,7 +431,7 @@ utf8_num_bytes(const uint8_t c)
 static inline uint32_t
 parse_counted_utf8_char(const uint8_t* utf8, size_t size)
 {
-	uint32_t c = utf8[0] & ((1 << (8 - size)) - 1);
+	uint32_t c = utf8[0] & ((1u << (8 - size)) - 1);
 	for (size_t i = 1; i < size; ++i) {
 		const uint8_t in = utf8[i] & 0x3F;
 		c = (c << 6) | in;
@@ -439,7 +447,8 @@ parse_utf8_char(const uint8_t* utf8, size_t* size)
 	case 1: case 2: case 3: case 4:
 		return parse_counted_utf8_char(utf8, *size);
 	default:
-		return *size = 0;
+		*size = 0;
+		return 0;
 	}
 }
 
@@ -517,7 +526,7 @@ uri_is_under(const SerdURI* uri, const SerdURI* root)
 }
 
 static inline bool
-is_uri_scheme_char(const uint8_t c)
+is_uri_scheme_char(const int c)
 {
 	switch (c) {
 	case ':': case '+': case '-': case '.':
