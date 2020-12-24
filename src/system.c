@@ -34,6 +34,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "abstract_io.h"
+
 FILE*
 serd_fopen(const char* path, const char* mode)
 {

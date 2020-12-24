@@ -27,6 +27,8 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "abstract_io.h"
+
 #if defined(__GNUC__)
 #    define SERD_LOG_FUNC(fmt, arg1) __attribute__((format(printf, fmt, arg1)))
 #else

@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "abstract_io.h"
+
 typedef enum {
 	FIELD_NONE,
 	FIELD_SUBJECT,
@@ -1015,7 +1017,7 @@ serd_writer_get_env(SerdWriter* writer)
 size_t
 serd_file_sink(const void* buf, size_t len, void* stream)
 {
-	return abstract_fwrite(buf, 1, len, (FILE*)stream);
+	return fwrite(buf, 1, len, (FILE*)stream);
 }
 
 size_t

@@ -26,6 +26,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "abstract_io.h"
+
 SerdStatus
 r_err(SerdReader* reader, SerdStatus st, const char* fmt, ...)
 {
@@ -68,7 +70,7 @@ serd_file_read_byte(void* buf, size_t size, size_t nmemb, void* stream)
 	(void)size;
 	(void)nmemb;
 
-	const int c = abstract_getc(stream);
+	const int c = getc((FILE*)stream);
 	if (c == EOF) {
 		*((uint8_t*)buf) = 0;
 		return 0;
@@ -276,14 +278,14 @@ serd_reader_read_file(SerdReader*    reader,
 		return SERD_ERR_BAD_ARG;
 	}
 
-	void* fd = serd_fopen((const char*)path, "rb");
+	FILE* fd = serd_fopen((const char*)path, "rb");
 	if (!fd) {
 		serd_free(path);
 		return SERD_ERR_UNKNOWN;
 	}
 
 	SerdStatus ret = serd_reader_read_file_handle(reader, fd, path);
-	abstract_fclose(fd);
+	fclose(fd);
 	free(path);
 	return ret;
 }
@@ -307,14 +309,14 @@ skip_bom(SerdReader* me)
 
 SerdStatus
 serd_reader_start_stream(SerdReader*    reader,
-                         void*          file,
+                         FILE*          file,
                          const uint8_t* name,
                          bool           bulk)
 {
 	return serd_reader_start_source_stream(
 		reader,
-		bulk ? (SerdSource)abstract_fread : serd_file_read_byte,
-		(SerdStreamErrorFunc)abstract_ferror,
+		bulk ? (SerdSource)fread : serd_file_read_byte,
+		(SerdStreamErrorFunc)ferror,
 		file,
 		name,
 		bulk ? SERD_PAGE_SIZE : 1);
@@ -372,11 +374,11 @@ serd_reader_end_stream(SerdReader* reader)
 
 SerdStatus
 serd_reader_read_file_handle(SerdReader*    reader,
-                             void*          file,
+                             FILE*          file,
                              const uint8_t* name)
 {
 	return serd_reader_read_source(
-		reader, (SerdSource)abstract_fread, (SerdStreamErrorFunc)abstract_ferror,
+		reader, (SerdSource)fread, (SerdStreamErrorFunc)ferror,
 		file, name, SERD_PAGE_SIZE);
 }
 

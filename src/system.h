@@ -21,6 +21,8 @@
 
 #include <stdio.h>
 
+#include "abstract_io.h"
+
 /// Open a file configured for fast sequential reading
 FILE* serd_fopen(const char* path, const char* mode);
 

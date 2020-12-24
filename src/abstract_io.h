@@ -19,7 +19,13 @@ int abstract_error_vfprintf (const char *format, va_list arg);
 int abstract_error_fprintf (const char *format, ...);
 int abstract_ferror (void* stream);
 int abstract_fclose (void* stream);
-int abstract_fileno (void* stream);
 int abstract_getc (void* stream);
+
+#define FILE void
+#define fopen abstract_fopen
+#define fread abstract_fread
+#define fwrite abstract_fwrite
+#define ferror abstract_ferror
+#define getc abstract_getc
 
 #endif
