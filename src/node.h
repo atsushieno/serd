@@ -14,33 +14,32 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#ifndef SERD_INTERNAL_H
-#define SERD_INTERNAL_H
+#ifndef SERD_NODE_H
+#define SERD_NODE_H
 
 #include "serd/serd.h"
 
-#include <stdio.h>
+#include <stddef.h>
 
-#define NS_XSD "http://www.w3.org/2001/XMLSchema#"
-#define NS_RDF "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+struct SerdNodeImpl {
+	size_t        n_bytes;  /**< Size in bytes (not including null) */
+	SerdNodeFlags flags;    /**< Node flags (e.g. string properties) */
+	SerdType      type;     /**< Node type */
+};
 
-#define SERD_PAGE_SIZE 4096
-
-#ifndef MIN
-#    define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
-/* Error reporting */
-
-static inline void
-serd_error(SerdErrorSink error_sink, void* handle, const SerdError* e)
+static inline char*
+serd_node_buffer(SerdNode* node)
 {
-	if (error_sink) {
-		error_sink(handle, e);
-	} else {
-		abstract_error_fprintf("error: %s:%u:%u: ", e->filename, e->line, e->col);
-		abstract_error_vfprintf(e->fmt, *e->args);
-	}
+	return (char*)(node + 1);
 }
 
-#endif  // SERD_INTERNAL_H
+static inline const char*
+serd_node_buffer_c(const SerdNode* node)
+{
+	return (const char*)(node + 1);
+}
+
+SerdNode* serd_node_malloc(size_t n_bytes, SerdNodeFlags flags, SerdType type);
+void      serd_node_set(SerdNode** dst, const SerdNode* src);
+
+#endif  // SERD_NODE_H

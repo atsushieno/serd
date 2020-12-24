@@ -1,5 +1,5 @@
 /*
-  Copyright 2011-2014 David Robillard <http://drobilla.net>
+  Copyright 2011-2020 David Robillard <http://drobilla.net>
 
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
@@ -14,8 +14,14 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#include "serd_internal.h"
+#include "string_utils.h"
+#include "uri_utils.h"
 
+#include "serd/serd.h"
+
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -97,7 +103,7 @@ serd_uri_string_has_scheme(const uint8_t* utf8)
 		return false;  // Invalid scheme initial character, URI is relative
 	}
 
-	for (uint8_t c; (c = *++utf8) != '\0';) {
+	for (uint8_t c = 0; (c = *++utf8) != '\0';) {
 		if (!is_uri_scheme_char(c)) {
 			return false;
 		} else if (c == ':') {
@@ -148,7 +154,7 @@ maybe_authority:
 	if (*ptr == '/' && *(ptr + 1) == '/') {
 		ptr += 2;
 		out->authority.buf = ptr;
-		for (uint8_t c; (c = *ptr) != '\0'; ++ptr) {
+		for (uint8_t c = 0; (c = *ptr) != '\0'; ++ptr) {
 			switch (c) {
 			case '/': goto path;
 			case '?': goto query;
@@ -171,7 +177,7 @@ path:
 	}
 	out->path.buf = ptr;
 	out->path.len = 0;
-	for (uint8_t c; (c = *ptr) != '\0'; ++ptr) {
+	for (uint8_t c = 0; (c = *ptr) != '\0'; ++ptr) {
 		switch (c) {
 		case '?': goto query;
 		case '#': goto fragment;
@@ -187,7 +193,7 @@ path:
 query:
 	if (*ptr == '?') {
 		out->query.buf = ++ptr;
-		for (uint8_t c; (c = *ptr) != '\0'; ++ptr) {
+		for (uint8_t c = 0; (c = *ptr) != '\0'; ++ptr) {
 			if (c == '#') {
 				goto fragment;
 			}
@@ -282,7 +288,7 @@ remove_dot_segments(const uint8_t* path, size_t len, size_t* up)
 static void
 merge(SerdChunk* base, SerdChunk* path)
 {
-	size_t         up;
+	size_t         up    = 0;
 	const uint8_t* begin = remove_dot_segments(path->buf, path->len, &up);
 	const uint8_t* end   = path->buf + path->len;
 
@@ -408,7 +414,7 @@ write_rel_path(SerdSink       sink,
 	}
 
 	// Write suffix
-	return len += write_path_tail(sink, stream, uri, last_shared_sep + 1);
+	return len + write_path_tail(sink, stream, uri, last_shared_sep + 1);
 }
 
 static uint8_t
@@ -442,7 +448,8 @@ serd_uri_serialise_relative(const SerdURI* uri,
 		if (uri->authority.buf) {
 			len += sink("//", 2, stream);
 			len += sink(uri->authority.buf, uri->authority.len, stream);
-			if (uri->authority.buf[uri->authority.len - 1] != '/' &&
+			if (uri->authority.len > 0 &&
+			    uri->authority.buf[uri->authority.len - 1] != '/' &&
 			    serd_uri_path_starts_without_slash(uri)) {
 				// Special case: ensure path begins with a slash
 				// https://tools.ietf.org/html/rfc3986#section-3.2

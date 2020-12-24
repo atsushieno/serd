@@ -1,5 +1,5 @@
 /*
-  Copyright 2011-2016 David Robillard <http://drobilla.net>
+  Copyright 2011-2020 David Robillard <http://drobilla.net>
 
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
@@ -14,8 +14,11 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#include "serd_internal.h"
+#include "serd/serd.h"
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -44,6 +47,10 @@ serd_env_new(const SerdNode* base_uri)
 void
 serd_env_free(SerdEnv* env)
 {
+	if (!env) {
+		return;
+	}
+
 	for (size_t i = 0; i < env->n_prefixes; ++i) {
 		serd_node_free(&env->prefixes[i].name);
 		serd_node_free(&env->prefixes[i].uri);
@@ -67,8 +74,13 @@ SerdStatus
 serd_env_set_base_uri(SerdEnv*        env,
                       const SerdNode* uri)
 {
-	if (!env || !uri) {
+	if (!env || (uri && uri->type != SERD_URI)) {
 		return SERD_ERR_BAD_ARG;
+	} else if (!uri || !uri->buf) {
+		serd_node_free(&env->base_uri_node);
+		env->base_uri_node = SERD_NODE_NULL;
+		env->base_uri      = SERD_URI_NULL;
+		return SERD_SUCCESS;
 	}
 
 	// Resolve base URI and create a new node and URI for it
@@ -76,17 +88,15 @@ serd_env_set_base_uri(SerdEnv*        env,
 	SerdNode base_uri_node = serd_node_new_uri_from_node(
 		uri, &env->base_uri, &base_uri);
 
-	if (base_uri_node.buf) {
-		// Replace the current base URI
-		serd_node_free(&env->base_uri_node);
-		env->base_uri_node = base_uri_node;
-		env->base_uri      = base_uri;
-		return SERD_SUCCESS;
-	}
-	return SERD_ERR_BAD_ARG;
+	// Replace the current base URI
+	serd_node_free(&env->base_uri_node);
+	env->base_uri_node = base_uri_node;
+	env->base_uri      = base_uri;
+
+	return SERD_SUCCESS;
 }
 
-static inline SerdPrefix*
+static inline SERD_PURE_FUNC SerdPrefix*
 serd_env_find(const SerdEnv* env,
               const uint8_t* name,
               size_t         name_len)
@@ -109,9 +119,11 @@ serd_env_add(SerdEnv*        env,
 {
 	SerdPrefix* const prefix = serd_env_find(env, name->buf, name->n_bytes);
 	if (prefix) {
-		SerdNode old_prefix_uri = prefix->uri;
-		prefix->uri = serd_node_copy(uri);
-		serd_node_free(&old_prefix_uri);
+		if (!serd_node_equals(&prefix->uri, uri)) {
+			SerdNode old_prefix_uri = prefix->uri;
+			prefix->uri = serd_node_copy(uri);
+			serd_node_free(&old_prefix_uri);
+		}
 	} else {
 		env->prefixes = (SerdPrefix*)realloc(
 			env->prefixes, (++env->n_prefixes) * sizeof(SerdPrefix));
@@ -205,6 +217,13 @@ serd_env_expand_node(const SerdEnv*  env,
                      const SerdNode* node)
 {
 	switch (node->type) {
+	case SERD_NOTHING:
+	case SERD_LITERAL:
+		break;
+	case SERD_URI: {
+		SerdURI ignored;
+		return serd_node_new_uri_from_node(node, &env->base_uri, &ignored);
+	}
 	case SERD_CURIE: {
 		SerdChunk prefix;
 		SerdChunk suffix;
@@ -218,13 +237,10 @@ serd_env_expand_node(const SerdEnv*  env,
 		ret.n_chars = serd_strlen(buf, NULL, NULL);
 		return ret;
 	}
-	case SERD_URI: {
-		SerdURI ignored;
-		return serd_node_new_uri_from_node(node, &env->base_uri, &ignored);
+	case SERD_BLANK:
+		break;
 	}
-	default:
-		return SERD_NODE_NULL;
-	}
+	return SERD_NODE_NULL;
 }
 
 void

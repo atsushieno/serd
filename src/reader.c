@@ -1,5 +1,5 @@
 /*
-  Copyright 2011-2017 David Robillard <http://drobilla.net>
+  Copyright 2011-2020 David Robillard <http://drobilla.net>
 
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
@@ -15,9 +15,10 @@
 */
 
 #include "reader.h"
+#include "system.h"
+
 #include "serd_internal.h"
 
-#include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdint.h>
@@ -25,7 +26,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-int
+SerdStatus
 r_err(SerdReader* reader, SerdStatus st, const char* fmt, ...)
 {
 	va_list args;
@@ -34,7 +35,7 @@ r_err(SerdReader* reader, SerdStatus st, const char* fmt, ...)
 	const SerdError e = { st, cur->filename, cur->line, cur->col, fmt, &args };
 	serd_error(reader->error_sink, reader->error_handle, &e);
 	va_end(args);
-	return 0;
+	return st;
 }
 
 void
@@ -93,7 +94,7 @@ push_node_padded(SerdReader* reader, size_t maxlen,
 	memcpy(buf, str, n_bytes + 1);
 
 #ifdef SERD_STACK_CHECK
-	reader->allocs = realloc(
+	reader->allocs = (Ref*)realloc(
 		reader->allocs, sizeof(reader->allocs) * (++reader->n_allocs));
 	reader->allocs[reader->n_allocs - 1] = ((uint8_t*)mem - reader->stack.buf);
 #endif
@@ -133,31 +134,37 @@ pop_node(SerdReader* reader, Ref ref)
 	return 0;
 }
 
-bool
+SerdStatus
 emit_statement(SerdReader* reader, ReadContext ctx, Ref o, Ref d, Ref l)
 {
 	SerdNode* graph = deref(reader, ctx.graph);
 	if (!graph && reader->default_graph.buf) {
 		graph = &reader->default_graph;
 	}
-	bool ret = !reader->statement_sink ||
-		!reader->statement_sink(
-			reader->handle, *ctx.flags, graph,
-			deref(reader, ctx.subject), deref(reader, ctx.predicate),
-			deref(reader, o), deref(reader, d), deref(reader, l));
+
+	const SerdStatus st =
+	    !reader->statement_sink
+	        ? SERD_SUCCESS
+	        : reader->statement_sink(reader->handle,
+	                                 *ctx.flags,
+	                                 graph,
+	                                 deref(reader, ctx.subject),
+	                                 deref(reader, ctx.predicate),
+	                                 deref(reader, o),
+	                                 deref(reader, d),
+	                                 deref(reader, l));
+
 	*ctx.flags &= SERD_ANON_CONT|SERD_LIST_CONT;  // Preserve only cont flags
-	return ret;
+	return st;
 }
 
-static bool
+static SerdStatus
 read_statement(SerdReader* reader)
 {
-	switch (reader->syntax) {
-	default: return read_n3_statement(reader);
-	}
+	return read_n3_statement(reader);
 }
 
-static bool
+static SerdStatus
 read_doc(SerdReader* reader)
 {
 	return ((reader->syntax == SERD_NQUADS) ? read_nquadsDoc(reader)
@@ -211,6 +218,10 @@ serd_reader_set_error_sink(SerdReader*   reader,
 void
 serd_reader_free(SerdReader* reader)
 {
+	if (!reader) {
+		return;
+	}
+
 	pop_node(reader, reader->rdf_nil);
 	pop_node(reader, reader->rdf_rest);
 	pop_node(reader, reader->rdf_first);
@@ -234,14 +245,15 @@ serd_reader_get_handle(const SerdReader* reader)
 }
 
 void
-serd_reader_add_blank_prefix(SerdReader*    reader,
-                             const uint8_t* prefix)
+serd_reader_add_blank_prefix(SerdReader* reader, const uint8_t* prefix)
 {
 	free(reader->bprefix);
 	reader->bprefix_len = 0;
 	reader->bprefix     = NULL;
-	if (prefix) {
-		reader->bprefix_len = strlen((const char*)prefix);
+
+	const size_t prefix_len = prefix ? strlen((const char*)prefix) : 0;
+	if (prefix_len) {
+		reader->bprefix_len = prefix_len;
 		reader->bprefix     = (uint8_t*)malloc(reader->bprefix_len + 1);
 		memcpy(reader->bprefix, prefix, reader->bprefix_len + 1);
 	}
@@ -323,15 +335,15 @@ serd_reader_start_source_stream(SerdReader*         reader,
 static SerdStatus
 serd_reader_prepare(SerdReader* reader)
 {
-	reader->status = serd_byte_source_prepare(&reader->source);
-	if (reader->status == SERD_SUCCESS) {
-		reader->status = skip_bom(reader);
-	} else if (reader->status == SERD_FAILURE) {
+	SerdStatus st = serd_byte_source_prepare(&reader->source);
+	if (st == SERD_SUCCESS) {
+		st = skip_bom(reader);
+	} else if (st == SERD_FAILURE) {
 		reader->source.eof = true;
 	} else {
-		r_err(reader, reader->status, "read error: %s\n", strerror(errno));
+		r_err(reader, st, "read error: %s\n", strerror(errno));
 	}
-	return reader->status;
+	return st;
 }
 
 SerdStatus
@@ -349,7 +361,7 @@ serd_reader_read_chunk(SerdReader* reader)
 		eat_byte_safe(reader, 0);
 	}
 
-	return st ? st : read_statement(reader) ? SERD_SUCCESS : SERD_FAILURE;
+	return st ? st : read_statement(reader);
 }
 
 SerdStatus
@@ -382,9 +394,9 @@ serd_reader_read_source(SerdReader*         reader,
 	if (st || (st = serd_reader_prepare(reader))) {
 		serd_reader_end_stream(reader);
 		return st;
-	} else if (!read_doc(reader)) {
+	} else if ((st = read_doc(reader))) {
 		serd_reader_end_stream(reader);
-		return SERD_ERR_UNKNOWN;
+		return st;
 	}
 
 	return serd_reader_end_stream(reader);
@@ -397,7 +409,7 @@ serd_reader_read_string(SerdReader* reader, const uint8_t* utf8)
 
 	SerdStatus st = serd_reader_prepare(reader);
 	if (!st) {
-		st = read_doc(reader) ? SERD_SUCCESS : SERD_ERR_UNKNOWN;
+		st = read_doc(reader);
 	}
 
 	serd_byte_source_close(&reader->source);

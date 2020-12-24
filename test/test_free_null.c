@@ -1,5 +1,5 @@
 /*
-  Copyright 2011-2020 David Robillard <http://drobilla.net>
+  Copyright 2020 David Robillard <http://drobilla.net>
 
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
@@ -14,33 +14,20 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#ifndef SERD_INTERNAL_H
-#define SERD_INTERNAL_H
+#undef NDEBUG
 
 #include "serd/serd.h"
 
-#include <stdio.h>
+#include <stddef.h>
 
-#define NS_XSD "http://www.w3.org/2001/XMLSchema#"
-#define NS_RDF "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
-
-#define SERD_PAGE_SIZE 4096
-
-#ifndef MIN
-#    define MIN(a, b) (((a) < (b)) ? (a) : (b))
-#endif
-
-/* Error reporting */
-
-static inline void
-serd_error(SerdErrorSink error_sink, void* handle, const SerdError* e)
+int
+main(void)
 {
-	if (error_sink) {
-		error_sink(handle, e);
-	} else {
-		abstract_error_fprintf("error: %s:%u:%u: ", e->filename, e->line, e->col);
-		abstract_error_vfprintf(e->fmt, *e->args);
-	}
-}
+	serd_free(NULL);
+	serd_node_free(NULL);
+	serd_env_free(NULL);
+	serd_reader_free(NULL);
+	serd_writer_free(NULL);
 
-#endif  // SERD_INTERNAL_H
+	return 0;
+}

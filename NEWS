@@ -1,10 +1,32 @@
-serd (0.30.3) unstable;
+serd (0.30.7) unstable;
+
+  * Deprecate serd_uri_to_path()
+  * Don't install API man pages
+  * Fix potential memory error when serialising URIs
+  * Move headers to an include directory
+  * Refuse to write relative URI references to NTriples
+  * Remove use of C character class functions that may use locale
+  * Split up and reorganize unit tests
+  * Use aligned allocation via C11 or Windows API where possible
+
+ -- David Robillard <d@drobilla.net>  Thu, 17 Dec 2020 09:09:31 +0000
+
+serd (0.30.6) stable;
+
+  * Fix various minor warnings and other code quality issues
+  * Improve reader error handling
+  * Make all free functions tolerant of NULL
+  * Parse prefixed names more strictly
+
+ -- David Robillard <d@drobilla.net>  Sun, 27 Sep 2020 10:51:38 +0000
+
+serd (0.30.4) stable;
 
   * Fix EOF handling while reading in bulk or from strings
   * Fix lax handling of string errors
   * Fix reading from a null-delimited socket
 
- -- David Robillard <d@drobilla.net>  Sun, 08 Dec 2019 22:20:08 +0000
+ -- David Robillard <d@drobilla.net>  Sun, 26 Apr 2020 16:04:05 +0000
 
 serd (0.30.2) stable;
 

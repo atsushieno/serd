@@ -1,5 +1,5 @@
 /*
-  Copyright 2011-2016 David Robillard <http://drobilla.net>
+  Copyright 2011-2020 David Robillard <http://drobilla.net>
 
   Permission to use, copy, modify, and/or distribute this software for any
   purpose with or without fee is hereby granted, provided that the above
@@ -14,10 +14,19 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
-#include "serd_internal.h"
+#include "node.h"
 
+#include "base64.h"
+#include "string_utils.h"
+
+#include "serd/serd.h"
+
+#include <assert.h>
 #include <float.h>
 #include <math.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,10 +46,10 @@ serd_node_from_string(SerdType type, const uint8_t* str)
 		return SERD_NODE_NULL;
 	}
 
-	uint32_t     flags       = 0;
-	size_t       buf_n_bytes = 0;
-	const size_t buf_n_chars = serd_strlen(str, &buf_n_bytes, &flags);
-	SerdNode ret = { str, buf_n_bytes, buf_n_chars, flags, type };
+	SerdNodeFlags flags       = 0;
+	size_t        buf_n_bytes = 0;
+	const size_t  buf_n_chars = serd_strlen(str, &buf_n_bytes, &flags);
+	SerdNode ret = {str, buf_n_bytes, buf_n_chars, flags, type};
 	return ret;
 }
 
@@ -51,9 +60,9 @@ serd_node_from_substring(SerdType type, const uint8_t* str, const size_t len)
 		return SERD_NODE_NULL;
 	}
 
-	uint32_t     flags       = 0;
-	size_t       buf_n_bytes = 0;
-	const size_t buf_n_chars = serd_substrlen(str, len, &buf_n_bytes, &flags);
+	SerdNodeFlags flags       = 0;
+	size_t        buf_n_bytes = 0;
+	const size_t  buf_n_chars = serd_substrlen(str, len, &buf_n_bytes, &flags);
 	assert(buf_n_bytes <= len);
 	SerdNode ret = { str, buf_n_bytes, buf_n_chars, flags, type };
 	return ret;
@@ -93,11 +102,11 @@ serd_uri_string_length(const SerdURI* uri)
 #define ADD_LEN(field, n_delims) \
 	if ((field).len) { len += (field).len + (n_delims); }
 
-	ADD_LEN(uri->path,      1);  // + possible leading `/'
-	ADD_LEN(uri->scheme,    1);  // + trailing `:'
-	ADD_LEN(uri->authority, 2);  // + leading `//'
-	ADD_LEN(uri->query,     1);  // + leading `?'
-	ADD_LEN(uri->fragment,  1);  // + leading `#'
+	ADD_LEN(uri->path,      1)  // + possible leading `/'
+	ADD_LEN(uri->scheme,    1)  // + trailing `:'
+	ADD_LEN(uri->authority, 2)  // + leading `//'
+	ADD_LEN(uri->query,     1)  // + leading `?'
+	ADD_LEN(uri->fragment,  1)  // + leading `#'
 
 	return len + 2;  // + 2 for authority `//'
 }
@@ -185,7 +194,10 @@ serd_node_new_file_uri(const uint8_t* path,
 			serd_chunk_sink(path + i, 1, &chunk);
 		} else {
 			char escape_str[4] = { '%', 0, 0, 0 };
-			snprintf(escape_str + 1, sizeof(escape_str) - 1, "%X", path[i]);
+			snprintf(escape_str + 1,
+			         sizeof(escape_str) - 1,
+			         "%X",
+			         (unsigned)path[i]);
 			serd_chunk_sink(escape_str, 3, &chunk);
 		}
 	}
@@ -334,44 +346,15 @@ serd_node_new_integer(int64_t i)
 	return node;
 }
 
-/**
-   Base64 encoding table.
-   @see <a href="http://tools.ietf.org/html/rfc3548#section-3">RFC3986 S3</a>.
-*/
-static const uint8_t b64_map[] =
-	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-
-/**
-   Encode 3 raw bytes to 4 base64 characters.
-*/
-static inline void
-encode_chunk(uint8_t out[4], const uint8_t in[3], size_t n_in)
-{
-	out[0] = b64_map[in[0] >> 2];
-	out[1] = b64_map[((in[0] & 0x03) << 4) | ((in[1] & 0xF0) >> 4)];
-	out[2] = ((n_in > 1)
-	          ? (b64_map[((in[1] & 0x0F) << 2) | ((in[2] & 0xC0) >> 6)])
-	          : (uint8_t)'=');
-	out[3] = ((n_in > 2) ? b64_map[in[2] & 0x3F] : (uint8_t)'=');
-}
-
 SerdNode
 serd_node_new_blob(const void* buf, size_t size, bool wrap_lines)
 {
-	const size_t len  = (size + 2) / 3 * 4 + (wrap_lines * ((size - 1) / 57));
+	const size_t len  = serd_base64_get_length(size, wrap_lines);
 	uint8_t*     str  = (uint8_t*)calloc(len + 2, 1);
 	SerdNode     node = { str, len, len, 0, SERD_LITERAL };
-	for (size_t i = 0, j = 0; i < size; i += 3, j += 4) {
-		uint8_t in[4] = { 0, 0, 0, 0 };
-		size_t  n_in  = MIN(3, size - i);
-		memcpy(in, (const uint8_t*)buf + i, n_in);
 
-		if (wrap_lines && i > 0 && (i % 57) == 0) {
-			str[j++] = '\n';
-			node.flags |= SERD_HAS_NEWLINE;
-		}
-
-		encode_chunk(str + j, in, n_in);
+	if (serd_base64_encode(str, buf, size, wrap_lines)) {
+		node.flags |= SERD_HAS_NEWLINE;
 	}
 	return node;
 }
