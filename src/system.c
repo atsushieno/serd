@@ -45,7 +45,7 @@ serd_fopen(const char* path, const char* mode)
 		        path, strerror(errno));
 		return NULL;
 	}
-#if defined(HAVE_POSIX_FADVISE) && defined(HAVE_FILENO)
+#if !ANDROID && defined(HAVE_POSIX_FADVISE) && defined(HAVE_FILENO)
 	posix_fadvise(fileno(fd), 0, 0, POSIX_FADV_SEQUENTIAL);
 #endif
 	return fd;

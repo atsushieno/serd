@@ -26,6 +26,7 @@ int abstract_getc (void* stream);
 #define fread abstract_fread
 #define fwrite abstract_fwrite
 #define ferror abstract_ferror
+#define fclose abstract_fclose
 #define getc abstract_getc
 
 #endif
