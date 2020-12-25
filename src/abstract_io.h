@@ -5,10 +5,8 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <sys/types.h>
-#include <serd/serd.h>
 
 /* nothing for desktop, AAssetManager* for Android */
-SERD_API
 void abstract_set_io_context (void* ioContext);
 
 /* serd specific */
@@ -21,6 +19,14 @@ int abstract_ferror (void* stream);
 int abstract_fclose (void* stream);
 int abstract_getc (void* stream);
 
+/* lilv-specific */
+int abstract_ftell(void *stream);
+int abstract_fseek(void* stream, long offset, int origin);
+
+void abstract_dir_for_each(const char* path,
+                  void*       data,
+                  void (*f)(const char* path, const char* name, void* data));
+
 #define FILE void
 #define fopen abstract_fopen
 #define fread abstract_fread
@@ -28,5 +34,7 @@ int abstract_getc (void* stream);
 #define ferror abstract_ferror
 #define fclose abstract_fclose
 #define getc abstract_getc
+#define ftell abstract_ftell
+#define fseek abstract_fseek
 
 #endif
