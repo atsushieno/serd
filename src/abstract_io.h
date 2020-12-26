@@ -6,8 +6,10 @@
 #include <stdarg.h>
 #include <sys/types.h>
 
+#define AAP_PUBLIC_API __attribute__((visibility("default")))
+
 /* nothing for desktop, AAssetManager* for Android */
-void abstract_set_io_context (void* ioContext);
+void AAP_PUBLIC_API abstract_set_io_context (void* ioContext);
 
 /* serd specific */
 void* abstract_fopen(const char* path, const char* mode);
